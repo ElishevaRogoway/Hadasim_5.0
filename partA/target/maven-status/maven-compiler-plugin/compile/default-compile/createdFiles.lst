@@ -1,0 +1,5 @@
+CSVParquetReader.class
+LogErrorAnalysis.class
+HourlyAverageCalculator.class
+TimeSeriesValidator.class
+partsAverageCalc.class
