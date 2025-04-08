@@ -5,67 +5,77 @@ import java.nio.file.*;
 import java.text.*;
 import java.util.*;
 
-
 public class TimeSeriesValidator {
     private static final String DATE_FORMAT = "dd/MM/yyyy HH:mm";
 
-    //פונקציה לבדיקת תקינות הקובץ
+    /**
+     * Validates the structure and contents of a time series CSV file.
+     * Checks include:
+     * - Correct header
+     * - Each row has two columns
+     * - Timestamp is in the correct format
+     * - No duplicate timestamps
+     * - Value is not empty, is numeric, and is not negative
+     */
     public static void validateCSV(String filePath) throws IOException {
-        Set<String> timestamps = new HashSet<>(); //מערך למניעת כפילויות של חותמות זהות
-        SimpleDateFormat dateFormat = new SimpleDateFormat(DATE_FORMAT);//מוודא שהתאריכים בפורמט הנכון
-        dateFormat.setLenient(false); //  מחמירים על הפורמט כדי שגאווה לא ינסה לתקן
+        Set<String> timestamps = new HashSet<>(); // Used to detect duplicate timestamps
+        SimpleDateFormat dateFormat = new SimpleDateFormat(DATE_FORMAT);
+        dateFormat.setLenient(false); // Strict parsing - invalid dates will throw ParseException
 
         try (BufferedReader reader = Files.newBufferedReader(Paths.get(filePath))) {
-            String line = reader.readLine(); // קורא את הכותרת
+            String line = reader.readLine(); // Read the header line
             if (line == null || !line.equals("timestamp,value")) {
                 throw new IllegalArgumentException("Error: File does not contain a valid title");
             }
+
             int lineNumber = 1;
             while ((line = reader.readLine()) != null) {
                 lineNumber++;
-                String[] parts = line.split(","); // מפריד לפי פסיק
-                //בודק שמספר העמודות הוא 2
+                String[] parts = line.split(",");
+
+                // Check number of columns
                 if (parts.length != 2) {
-                    System.out.println("Error at line " + lineNumber + ": number of colums not valid ");
+                    System.out.println("Error at line " + lineNumber + ": number of columns not valid");
                     continue;
-               }
-               
-                //בדיקת פורמט התאריך
+                }
+
                 String timestamp = parts[0].trim();
                 String valueStr = parts[1].trim();
+
+                // Validate timestamp format
                 try {
-                    dateFormat.parse(timestamp); 
+                    dateFormat.parse(timestamp);
                 } catch (ParseException e) {
                     System.out.println("Date format error in row " + lineNumber + ": " + timestamp);
                     continue;
                 }
 
-                //בדיקת כפילויות
+                // Check for duplicate timestamps
                 if (!timestamps.add(timestamp)) {
                     System.out.println("Duplicate timestamp at row " + lineNumber + ": " + timestamp);
                 }
 
-                // בדיקת ערכים תקינים
+                // Check if value is missing
                 if (valueStr.isEmpty()) {
                     System.out.println("Value missing in row: " + lineNumber);
                     continue;
                 }
 
-                //בדיקה אם הוזן ערך מספרי תקין
+                // Check if value is a valid number
                 try {
-                    double value = Double.parseDouble(valueStr); //ממיר את המחרוזת למספר
+                    double value = Double.parseDouble(valueStr);
                     if (value < 0) {
                         System.out.println("Negative value at row " + lineNumber + ": " + value);
                     }
                 } catch (NumberFormatException e) {
                     System.out.println("Non-numeric value at row " + lineNumber + ": " + valueStr);
                 }
-            }   
-        }   
+            }
+        }
     }
 
-          public static void main(String[] args) throws IOException {
-            String filePath = "time_series.csv"; // שם הקובץ לבדיקה
-            validateCSV(filePath);
-        }      
-   }
+     public static void main(String[] args) throws IOException {
+        String filePath = "time_series.csv"; // File to validate
+        validateCSV(filePath);
+    }
+}

@@ -1,11 +1,11 @@
 from model_db import OrderModel, OrderProductModel, ProductModel, Session
 
 class Order:
-    #חיבור למסד נתונים
+   
     def __init__(self, session):
         self.session = session
 
-    #יוצר הזמנה חדשה
+    #Create a new order with the given supplier ID and initial status
     def createOrder(self, supplier_id: str, status: str ):
         try:
             order = OrderModel(supplier_id=supplier_id, status=status)
@@ -17,7 +17,7 @@ class Order:
             self.session.rollback()
             raise ValueError(f"Failed to create order: {str(e)}")
 
-
+    #Add a product to an existing order
     def add_product_to_order(self, order_id: str, product_id: str, count: int) -> float:
         product = self.session.query(ProductModel).filter_by(id=product_id).first() #בודק אם המוצר קיים
         if not product:
@@ -32,13 +32,13 @@ class Order:
 
         return product.price * count
 
-    # צפייה בסטטוס ההזמנות קיימות
+    # Get a list of all non-completed orders' status
     def get_status_orders(self):
         return (self.session.query(OrderModel.id, OrderModel.status)
         .filter(OrderModel.status != "completed").all()
     )
 
-    #אישור ספק
+    # Update an order status to 'In progress' to indicate supplier approval.
     def approve_order(self, order_id: str):
         order = self.session.query(OrderModel).filter_by(id=order_id).first()
         if not order:
@@ -46,7 +46,7 @@ class Order:
         order.status = "In progress"
         self.session.commit()
 
-    #אישור בעל מכולת על קבלת הזמנה
+    # Mark an order as 'completed' to indicate the store owner received it.
     def complete_order(self, order_id: str):
         order = self.session.query(OrderModel).filter_by(id=order_id).first()
         if not order:

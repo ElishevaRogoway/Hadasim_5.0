@@ -1,62 +1,56 @@
+// Imports for reading Parquet, handling files, dates, and data structures
 import org.apache.parquet.avro.AvroParquetReader;
 import org.apache.parquet.hadoop.ParquetReader;
 import org.apache.hadoop.fs.Path;
-
 import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Date;
-import java.util.List;
-import java.util.Map;
-import java.util.TreeMap;
+import java.util.*;
 import java.util.stream.Collectors;
-
 import org.apache.avro.generic.GenericRecord;
 
 public class CSVParquetReader {
 
-    private static final String INPUT_DATE_FORMAT = "dd/MM/yyyy HH:mm";
-    private static final String OUTPUT_DATE_FORMAT = "dd/MM/yyyy HH:00";
-
-    // פונקציה לקריאת קובץ PARQUET
-    public static List<String[]> readParquet(String parquetFilePath) throws IOException {
-        List<String[]> data = new ArrayList<>();
-
-        Path path = new Path(parquetFilePath);
-        try (ParquetReader<GenericRecord> reader = AvroParquetReader.<GenericRecord>builder(path).build()) {
-            GenericRecord record;
-            while ((record = reader.read()) != null) {
-                String timestamp = record.get("timestamp").toString();
-                String value = record.get("value").toString();
-                data.add(new String[] { timestamp, value });
+        private static final String INPUT_DATE_FORMAT = "dd/MM/yyyy HH:mm";
+        private static final String OUTPUT_DATE_FORMAT = "dd/MM/yyyy HH:00";
+    
+        // Reads a Parquet file and returns the data as a list of [timestamp, value] arrays
+        public static List<String[]> readParquet(String parquetFilePath) throws IOException {
+            List<String[]> data = new ArrayList<>();
+            Path path = new Path(parquetFilePath);
+    
+            try (ParquetReader<GenericRecord> reader = AvroParquetReader.<GenericRecord>builder(path).build()) {
+                GenericRecord record;
+                while ((record = reader.read()) != null) {
+                    // Extract timestamp and value fields
+                    String timestamp = record.get("timestamp").toString();
+                    String value = record.get("value").toString();
+                    data.add(new String[] { timestamp, value });
+                }
             }
+    
+            return data;
         }
 
-        return data;
-    }
-
-    // שינוי פונקציה לחישוב ממוצע שעתי
+    // Calculates hourly average values from timestamped data
     public static Map<String, Double> hourlyAverages(List<String[]> dataRows) throws ParseException {
         SimpleDateFormat inputFormat = new SimpleDateFormat(INPUT_DATE_FORMAT);
         SimpleDateFormat outputFormat = new SimpleDateFormat(OUTPUT_DATE_FORMAT);
         Map<String, List<Double>> sortedHour = new TreeMap<>();
 
         for (String[] parts : dataRows) {
-            if (parts.length != 2)
-                continue;
+            if (parts.length != 2) continue;
 
             String timestampStr = parts[0].trim();
             String valueStr = parts[1].trim();
 
             try {
-                Date timestamp = inputFormat.parse(timestampStr);
-                String hourKey = outputFormat.format(timestamp);
-                double value = Double.parseDouble(valueStr);
+                Date timestamp = inputFormat.parse(timestampStr); // Parse date
+                String hourKey = outputFormat.format(timestamp);  // Round to full hour
+                double value = Double.parseDouble(valueStr);      // Parse value
 
                 sortedHour.putIfAbsent(hourKey, new ArrayList<>());
                 sortedHour.get(hourKey).add(value);
@@ -65,6 +59,7 @@ public class CSVParquetReader {
             }
         }
 
+        // Compute average for each hour
         Map<String, Double> hourlyAverages = new TreeMap<>();
         for (Map.Entry<String, List<Double>> entry : sortedHour.entrySet()) {
             List<Double> values = entry.getValue();
@@ -82,9 +77,9 @@ public class CSVParquetReader {
         String outputFilePath = "final_averages.csv";
 
         try {
-            // נבדוק אם קובץ CSV קיים
             File csvFile = new File(csvInputFile);
             if (csvFile.exists()) {
+                // Split CSV into daily files and merge results
                 partsAverageCalc.splitByDay(csvInputFile);
                 File folder = new File(".");
                 File[] files = folder.listFiles((dir, name) -> name.matches("day_\\d{2}_\\d{2}_\\d{4}\\.csv"));
@@ -96,14 +91,16 @@ public class CSVParquetReader {
                     }
                 }
 
+                // Merge daily CSV results into final file
                 partsAverageCalc.mergeResults(outputFilePath, dailyFiles);
                 System.out.println("Final average calculations (from CSV) are saved in: " + outputFilePath);
 
             } else if (new File(parquetInputFile).exists()) {
-                // קריאה מקובץ Parquet
+                // Process Parquet file if CSV not found
                 List<String[]> parquetData = readParquet(parquetInputFile);
                 Map<String, Double> averages = hourlyAverages(parquetData);
 
+                // Write final hourly averages to CSV
                 try (BufferedWriter writer = new BufferedWriter(new FileWriter(outputFilePath))) {
                     writer.write("time start\taverage");
                     writer.newLine();

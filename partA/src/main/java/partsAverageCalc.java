@@ -6,17 +6,17 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 public class partsAverageCalc {
-    
+
     private static final String INPUT_DATE_FORMAT = "dd/MM/yyyy HH:mm";
     private static final String OUTPUT_DATE_FORMAT = "dd/MM/yyyy HH:00";
-    
-    //# מחלק את הקובץ לקבצים לפי יום    
+
+    // Splits the input file into daily files based on the timestamp (date only)
     public static void splitByDay(String inputFilePath) throws IOException, ParseException {
         SimpleDateFormat inputFormat = new SimpleDateFormat(INPUT_DATE_FORMAT);
         Map<String, BufferedWriter> writers = new HashMap<>();
 
         try (BufferedReader reader = new BufferedReader(new FileReader(inputFilePath))) {
-            String line = reader.readLine(); // קריאת כותרת
+            String line = reader.readLine(); // Read header line
             if (line == null || !line.equals("timestamp,value")) {
                 throw new IllegalArgumentException("Error: Invalid file format");
             }
@@ -27,10 +27,12 @@ public class partsAverageCalc {
 
                 String timestampStr = parts[0].trim();
                 Date timestamp = inputFormat.parse(timestampStr);
-                
-                SimpleDateFormat dayFormat = new SimpleDateFormat("dd_MM_yyyy"); //מסירים את החלק של השעה
+
+                // Create key by day only (no hours)
+                SimpleDateFormat dayFormat = new SimpleDateFormat("dd_MM_yyyy");
                 String dayKey = dayFormat.format(timestamp);
 
+                // Get or create a writer for that day
                 BufferedWriter writer = writers.computeIfAbsent(dayKey, key -> {
                     try {
                         return new BufferedWriter(new FileWriter(String.format("day_%s.csv", key)));
@@ -42,16 +44,18 @@ public class partsAverageCalc {
                 writer.newLine();
             }
         }
-        // סגירת כל הקבצים
+
+        // Close all writers
         for (BufferedWriter writer : writers.values()) {
             writer.close();
         }
     }
-    // לכל שעה-מחשב ממוצע, מחזיר מפה של שעות עם ערך ממוצע לכל שעה
+
+    // Calculates average value for each hour from the given file
     public static Map<String, Double> hourlyAverages(String filePath) throws IOException, ParseException {
         SimpleDateFormat inputFormat = new SimpleDateFormat(INPUT_DATE_FORMAT);
         SimpleDateFormat outputFormat = new SimpleDateFormat(OUTPUT_DATE_FORMAT);
-        Map<String, List<Double>> sortedHour = new TreeMap<>(); //סדר עולה
+        Map<String, List<Double>> sortedHour = new TreeMap<>(); // Keeps hours sorted
 
         try (BufferedReader reader = new BufferedReader(new FileReader(filePath))) {
             String line;
@@ -64,7 +68,7 @@ public class partsAverageCalc {
 
                 try {
                     Date timestamp = inputFormat.parse(timestampStr);
-                    String hourKey = outputFormat.format(timestamp);
+                    String hourKey = outputFormat.format(timestamp); // Round to hour
                     double value = Double.parseDouble(valueStr);
 
                     sortedHour.putIfAbsent(hourKey, new ArrayList<>());
@@ -74,20 +78,21 @@ public class partsAverageCalc {
                 }
             }
         }
-        //חישוב ממצוצע לכל שעה
-        Map<String, Double> hourlyAverages = new TreeMap<>(); 
-        for (Map.Entry<String, List<Double>> entry : sortedHour.entrySet()) { 
-            List<Double> values = entry.getValue();
-            //System.out.println("Hour: " + entry.getKey() + " Values: " + values);
 
+        // Compute average for each hour
+        Map<String, Double> hourlyAverages = new TreeMap<>();
+        for (Map.Entry<String, List<Double>> entry : sortedHour.entrySet()) {
+            List<Double> values = entry.getValue();
+
+            // Remove NaNs if exist
             List<Double> cleanedValues = values.stream()
-            .filter(v -> !v.isNaN())  // מסנן החוצה את כל ערכי ה-NaN
-            .collect(Collectors.toList());
+                .filter(v -> !v.isNaN())
+                .collect(Collectors.toList());
 
             double average = cleanedValues.stream()
                 .mapToDouble(Double::doubleValue)
                 .average()
-                .orElse(0); // אם אין ערכים בכלל, מחזירים 0
+                .orElse(0); // If no valid values, return 0
 
             hourlyAverages.put(entry.getKey(), average);
         }
@@ -95,6 +100,7 @@ public class partsAverageCalc {
         return hourlyAverages;
     }
 
+    // Merges all hourly averages from each day into a final output file
     public static void mergeResults(String outputFilePath, List<String> dailyFiles) throws IOException {
         try (BufferedWriter writer = new BufferedWriter(new FileWriter(outputFilePath))) {
             writer.write("time start\taverage");
@@ -110,7 +116,7 @@ public class partsAverageCalc {
                 } catch (ParseException e) {
                     System.out.println("Error parsing file: " + dailyFile + " - " + e.getMessage());
                 }
-            }   
+            }
         }
     }
 
@@ -119,8 +125,10 @@ public class partsAverageCalc {
         String outputFilePath = "final_averages.csv";
 
         try {
+            // Step 1: Split by day
             splitByDay(inputFilePath);
 
+            // Step 2: Collect all daily file names
             File folder = new File(".");
             File[] files = folder.listFiles((dir, name) -> name.matches("day_\\d{2}_\\d{2}_\\d{4}\\.csv"));
             List<String> dailyFiles = new ArrayList<>();
@@ -130,6 +138,7 @@ public class partsAverageCalc {
                 }
             }
 
+            // Step 3: Merge all hourly averages to one file
             mergeResults(outputFilePath, dailyFiles);
             System.out.println("Final average calculations are saved in: " + outputFilePath);
 
@@ -138,4 +147,3 @@ public class partsAverageCalc {
         }
     }
 }
-
